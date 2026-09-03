@@ -1,0 +1,113 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum VerificationType {
+  BVN
+  NIN
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  FAILED
+}
+
+enum AccountStatus {
+  ACTIVE
+  BLOCKED
+}
+
+enum TransactionType {
+  FUNDING
+  INTRA_BANK
+  INTER_BANK
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESSFUL
+  FAILED
+  REVERSED
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  customer     Customer?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Customer {
+  id                 String       @id @default(cuid())
+  userId             String       @unique
+  firstName          String
+  lastName           String
+  phone              String
+  dateOfBirth        DateTime?
+  bvnEncrypted       String?
+  ninEncrypted       String?
+  verificationStatus VerificationStatus @default(PENDING)
+  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  onboarding         Onboarding[]
+  account            Account?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+}
+
+model Onboarding {
+  id                String             @id @default(cuid())
+  customerId        String
+  type              VerificationType
+  providerReference String?
+  status            VerificationStatus @default(PENDING)
+  customer          Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([customerId])
+}
+
+model Account {
+  id            String        @id @default(cuid())
+  customerId    String        @unique
+  accountNumber String        @unique
+  accountName   String
+  balanceKobo   BigInt        @default(0)
+  currency      String        @default("NGN")
+  status        AccountStatus @default(ACTIVE)
+  customer      Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  sentTransactions Transaction[] @relation("SenderAccount")
+  receivedTransactions Transaction[] @relation("RecipientAccount")
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model Transaction {
+  id                    String            @id @default(cuid())
+  reference             String            @unique
+  senderAccountId       String?
+  recipientAccountId    String?
+  recipientAccountNumber String?
+  recipientBankCode     String?
+  amountKobo            BigInt
+  type                  TransactionType
+  status                TransactionStatus @default(PENDING)
+  description           String?
+  providerReference     String?
+  senderAccount         Account?          @relation("SenderAccount", fields: [senderAccountId], references: [id])
+  recipientAccount      Account?          @relation("RecipientAccount", fields: [recipientAccountId], references: [id])
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  @@index([senderAccountId])
+  @@index([recipientAccountId])
+  @@index([createdAt])
+}
